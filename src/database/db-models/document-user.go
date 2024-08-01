@@ -15,5 +15,5 @@ type DocumentUser struct {
 	DocumentID uint           `gorm:"primaryKey"`
 	Permission PermissionEnum `gorm:"type:varchar(255)"`
 	User       User           `gorm:"foreignKey:UserID"`
-	Document   Document       `gorm:"foreignKey:DocumentID"`
+	Document   Document       `gorm:"foreignKey:DocumentID;constraint:OnDelete:CASCADE;"`
 }

@@ -2,8 +2,10 @@ package services
 
 import (
 	"crypto/tls"
+	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	gomail "gopkg.in/mail.v2"
 )
@@ -30,7 +32,7 @@ func NewMailService() (*MailService, error) {
 		return nil, err
 	}
 	transporter := gomail.NewDialer(os.Getenv("SMTP_HOST"), port, os.Getenv("SMTP_USER"), os.Getenv("SMTP_PASSWORD"))
-
+	transporter.Timeout = 40 * time.Second
 	// This is only needed when SSL/TLS certificate is not valid on server.
 	// In production this should be set to false.
 	transporter.TLSConfig = &tls.Config{InsecureSkipVerify: true}
@@ -41,7 +43,7 @@ func NewMailService() (*MailService, error) {
 
 func (ms *MailService) SendMail(mailOptions MailOptions) error {
 	msg := gomail.NewMessage()
-
+	fmt.Println("mo: ", mailOptions)
 	msg.SetHeader("From", mailOptions.From)
 	msg.SetHeader("Subject", mailOptions.Subject)
 	msg.SetBody("text/plain", mailOptions.Body)

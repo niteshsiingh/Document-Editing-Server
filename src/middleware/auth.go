@@ -108,13 +108,12 @@ func (a *Auth) ParseToken(tokenString string) (*jwt.Token, *entities.ParsedToken
 		return nil, nil, errors.New("invalid JWT token")
 	}
 	claims := token.Claims.(jwt.MapClaims)
-	jwtUser := claims["user"].(entities.JWTUser)
 	jwtUserId := uint(claims["userId"].(float64))
 	jwtUserEmailId := claims["emailId"].(string)
 	parsedToken := entities.ParsedToken{
 		UserID:  jwtUserId,
 		EmailID: jwtUserEmailId,
-		User:    jwtUser,
+		User:    entities.JWTUser{},
 	}
 
 	return token, &parsedToken, err

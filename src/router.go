@@ -1,25 +1,19 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/gin-gonic/gin"
 	"github.com/niteshsiingh/doc-server/src/config"
 	authcontroller "github.com/niteshsiingh/doc-server/src/controllers/auth"
 	"github.com/niteshsiingh/doc-server/src/controllers/document"
 	"github.com/niteshsiingh/doc-server/src/controllers/user"
-	dbmodels "github.com/niteshsiingh/doc-server/src/database/db-models"
+	"github.com/niteshsiingh/doc-server/src/database/tables/databases"
 	"github.com/niteshsiingh/doc-server/src/middleware"
-	"gorm.io/gorm"
 )
 
-func createRouter(db *gorm.DB, smtp *config.SMTP) *gin.Engine {
-	db.AutoMigrate(&dbmodels.User{}, &dbmodels.Document{}, &dbmodels.DocumentUser{}, &dbmodels.RefreshToken{})
+func createRouter(db *databases.Queries, smtp *config.SMTP) *gin.Engine {
 	ac := authcontroller.NewAuthController(db, smtp)
 	uc := user.NewUserController(db)
 	dc := document.NewDocumentController(db)
-	fmt.Println("uc: ", uc)
-	fmt.Println(ac, uc, dc, db)
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.Use(middleware.CORSMiddleware())
@@ -40,6 +34,7 @@ func createRouter(db *gorm.DB, smtp *config.SMTP) *gin.Engine {
 
 		routes.GET("/document", dc.GetAllDocuments)
 		routes.GET("/document/:document_id", dc.GetOneDocument)
+		routes.GET("/document/:document_id/identifiers", dc.GetDocumentIdentifiers)
 		routes.PUT("/document/:document_id", dc.UpdateDocument)
 		routes.POST("/document", dc.CreateDocument)
 		routes.POST("/document/:document_id/share", dc.ShareDocument)

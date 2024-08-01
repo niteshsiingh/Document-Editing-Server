@@ -1,17 +1,20 @@
 package document
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	dbmodels "github.com/niteshsiingh/doc-server/src/database/db-models"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/niteshsiingh/doc-server/src/database/tables/databases"
 	"github.com/niteshsiingh/doc-server/src/middleware"
 	"github.com/niteshsiingh/doc-server/src/responses"
 	"github.com/niteshsiingh/doc-server/src/services"
 )
 
 func (dc *DocumentController) CreateDocument(ctx *gin.Context) {
+	cxt := context.Background()
 	authTokenHeader := ctx.GetHeader("Authorization")
 	splitted := strings.Split(authTokenHeader, " ")
 	if authTokenHeader == "" || len(splitted) != 2 {
@@ -25,24 +28,27 @@ func (dc *DocumentController) CreateDocument(ctx *gin.Context) {
 		return
 	}
 	userID := parsedToken.UserID
-	user, err := services.FindUserByID(userID, dc.DB)
+	_, err = services.FindUserByID(cxt, userID, dc.DB)
 	if err != nil {
 		responses.NewResponse("User not found", http.StatusNotFound).Send(ctx)
 		return
 	}
-	document := dbmodels.Document{
-		UserID:   userID,
-		IsPublic: false,
-		User:     user,
+	document := databases.Document{
+		UserID:   pgtype.Int4{Int32: int32(userID), Valid: true},
+		IsPublic: pgtype.Bool{Bool: false, Valid: true},
+		// User:     user,
 	}
-
-	if err := dc.DB.Create(&document).Error; err != nil {
+	newDocID, err := dc.DB.CreateDocument(cxt, databases.CreateDocumentParams{
+		UserID:   document.UserID,
+		IsPublic: document.IsPublic,
+	})
+	if err != nil {
 		responses.NewResponse("Internal server error", http.StatusInternalServerError).Send(ctx)
 		return
 	}
 	type res struct {
-		ID uint `json:"id"`
+		ID int32 `json:"id"`
 	}
-	respon := res{ID: document.ID}
+	respon := res{ID: newDocID}
 	responses.NewResponse(respon, 200).Send(ctx)
 }

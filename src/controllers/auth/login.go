@@ -1,23 +1,24 @@
 package authcontroller
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/gin-gonic/gin"
 	"github.com/niteshsiingh/doc-server/src/config"
+	"github.com/niteshsiingh/doc-server/src/database/tables/databases"
 	"github.com/niteshsiingh/doc-server/src/entities"
 	"github.com/niteshsiingh/doc-server/src/responses"
 	"github.com/niteshsiingh/doc-server/src/services"
-	"gorm.io/gorm"
 )
 
 type AuthController struct {
-	DB   *gorm.DB
+	DB   *databases.Queries
 	SMTP *config.SMTP
 }
 
-func NewAuthController(db *gorm.DB, smtp *config.SMTP) *AuthController {
+func NewAuthController(db *databases.Queries, smtp *config.SMTP) *AuthController {
 	return &AuthController{
 		DB:   db,
 		SMTP: smtp,
@@ -25,7 +26,7 @@ func NewAuthController(db *gorm.DB, smtp *config.SMTP) *AuthController {
 }
 
 func (ac *AuthController) Login(ctx *gin.Context) {
-
+	cxt := context.Background()
 	var loginData entities.LoginData
 	err := ctx.ShouldBindJSON(&loginData)
 	if err != nil {
@@ -43,7 +44,7 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 		return
 	}
 
-	user, err := services.FindUserByEmail(loginData.Email, ac.DB)
+	user, err := services.FindUserByEmail(cxt, loginData.Email, ac.DB)
 	if err != nil {
 		responses.NewResponse("Internal server error", http.StatusInternalServerError).Send(ctx)
 		return
@@ -60,12 +61,12 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 		return
 	}
 
-	if !user.IsVerified {
+	if !user.IsVerified.Bool {
 		responses.NewResponse("User is not verified", http.StatusUnauthorized).Send(ctx)
 		return
 	}
 
-	msg, err := services.GenerateAuthResponse(&user, ac.DB)
+	msg, err := services.GenerateAuthResponse(cxt, &user, ac.DB)
 	if err != nil {
 		responses.NewResponse("Internal server error", http.StatusInternalServerError).Send(ctx)
 		return

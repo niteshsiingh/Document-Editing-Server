@@ -1,6 +1,7 @@
 package authcontroller
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,12 +12,13 @@ import (
 
 func (ac *AuthController) Logout(ctx *gin.Context) {
 	var user dbmodels.User
+	cxt := context.Background()
 	err := ctx.ShouldBindJSON(&user)
 	if err != nil {
 		responses.NewResponse("Invalid request", http.StatusBadRequest).Send(ctx)
 		return
 	}
-	err = services.LogoutUser(user.ID, ac.DB)
+	err = services.LogoutUser(cxt, user.ID, ac.DB)
 	if err != nil {
 		responses.NewResponse("Internal server error", http.StatusInternalServerError).Send(ctx)
 		return

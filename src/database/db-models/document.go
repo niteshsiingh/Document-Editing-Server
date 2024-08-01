@@ -2,8 +2,6 @@ package dbmodels
 
 import (
 	"time"
-
-	"gorm.io/datatypes"
 )
 
 type Document struct {
@@ -12,7 +10,8 @@ type Document struct {
 	UpdatedAt   time.Time          `json:"updatedAt"`
 	DeletedAt   *time.Time         `gorm:"index" json:"deletedAt,omitempty"`
 	Title       string             `gorm:"type:string;not null" json:"title"`
-	Content     datatypes.JSON     `gorm:"type:jsonb;not null;default: '{}'" json:"content"`
+	BodyID      uint               `gorm:"not null" json:"bodyId"`
+	Body        Identifier         `gorm:"foreignKey:BodyID" json:"body"`
 	UserID      uint               `gorm:"not null" json:"userId"`
 	User        User               `gorm:"foreignKey:UserID" json:"user"`
 	Users       []DocumentUser     `gorm:"constraint:OnDelete:CASCADE;" json:"users"`

@@ -1,13 +1,16 @@
 package document
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgtype"
 	dbmodels "github.com/niteshsiingh/doc-server/src/database/db-models"
+	"github.com/niteshsiingh/doc-server/src/database/tables/databases"
 	"github.com/niteshsiingh/doc-server/src/middleware"
 	"github.com/niteshsiingh/doc-server/src/responses"
 	"github.com/niteshsiingh/doc-server/src/services"
@@ -15,6 +18,7 @@ import (
 )
 
 func (dc *DocumentController) ShareDocument(ctx *gin.Context) {
+	cxt := context.Background()
 	documentIDstr := ctx.Param("document_id")
 	documentID, err := strconv.ParseUint(documentIDstr, 10, 64)
 	if err != nil {
@@ -34,8 +38,12 @@ func (dc *DocumentController) ShareDocument(ctx *gin.Context) {
 		return
 	}
 	userID := parsedToken.UserID
-	var document dbmodels.Document
-	err = dc.DB.First(&document, documentID).Error
+	// var document databases.Document
+	_, err = dc.DB.GetDocumentById(cxt, databases.GetDocumentByIdParams{
+		ID:     int32(documentID),
+		UserID: pgtype.Int4{Int32: int32(userID), Valid: true},
+	})
+	// err = dc.DB.First(&document, documentID).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			responses.NewResponse("Document not found", 404).Send(ctx)
@@ -54,30 +62,40 @@ func (dc *DocumentController) ShareDocument(ctx *gin.Context) {
 		return
 	}
 
-	var sharedUser dbmodels.User
-	if err := dc.DB.Where("email = ?", requestBody.Email).First(&sharedUser).Error; err != nil {
+	var sharedUser databases.User
+	sharedUser, err = dc.DB.GetUserByEmail(cxt, pgtype.Text{String: requestBody.Email, Valid: true})
+	if err != nil {
 		responses.NewResponse("User not found", http.StatusNotFound).Send(ctx)
 		return
 	}
 
-	documentUser := dbmodels.DocumentUser{
-		DocumentID: uint(documentID),
-		UserID:     sharedUser.ID,
-		Permission: requestBody.Permission,
-	}
-	if err := dc.DB.Create(&documentUser).Error; err != nil {
+	// documentUser := dbmodels.DocumentUser{
+	// 	DocumentID: uint(documentID),
+	// 	UserID:     sharedUser.ID,
+	// 	Permission: requestBody.Permission,
+	// }
+	err = dc.DB.CreateDocumentUser(cxt, databases.CreateDocumentUserParams{
+		UserID:     pgtype.Int4{Int32: int32(sharedUser.ID), Valid: true},
+		DocumentID: pgtype.Int4{Int32: int32(documentID), Valid: true},
+		Read:       pgtype.Bool{Bool: true, Valid: true},
+		Write:      pgtype.Bool{Bool: true, Valid: true},
+		Share:      pgtype.Bool{Bool: true, Valid: true},
+		Download:   pgtype.Bool{Bool: true, Valid: true},
+		Admin:      pgtype.Bool{Bool: true, Valid: true},
+	})
+	if err != nil {
 		responses.NewResponse("Failed to share document", 500).Send(ctx)
 		return
 	}
-	user, err := services.FindUserByID(uint(userID), dc.DB)
+	user, err := services.FindUserByID(cxt, uint(userID), dc.DB)
 	if err != nil {
 		responses.NewResponse("User not found", 404).Send(ctx)
 		return
 	}
 	mail := services.MailOptions{
 		From:    "8826ns@gmail.com",
-		To:      []string{sharedUser.Email},
-		Subject: user.Email + " shared a document with you!",
+		To:      []string{sharedUser.Email.String},
+		Subject: user.Email.String + " shared a document with you!",
 		Body:    "Click the following link to view and edit the document: " + os.Getenv("FRONT_END_URL") + "/document/" + strconv.Itoa(int(documentID)),
 	}
 	if err := dc.MS.SendMail(mail); err != nil {
@@ -88,6 +106,7 @@ func (dc *DocumentController) ShareDocument(ctx *gin.Context) {
 }
 
 func (dc *DocumentController) RemoveSharedUser(ctx *gin.Context) {
+	cxt := context.Background()
 	authTokenHeader := ctx.GetHeader("Authorization")
 	splitted := strings.Split(authTokenHeader, " ")
 	if authTokenHeader == "" || len(splitted) != 2 {
@@ -107,17 +126,26 @@ func (dc *DocumentController) RemoveSharedUser(ctx *gin.Context) {
 		responses.NewResponse("Invalid document ID", 400).Send(ctx)
 		return
 	}
-	var document dbmodels.Document
-	if err := dc.DB.Where("id = ? AND user_id = ?", documentID, userID).First(&document).Error; err != nil {
+	// var document databases.Document
+	_, err = dc.DB.FindDocument(cxt, databases.FindDocumentParams{
+		ID:     int32(documentID),
+		UserID: pgtype.Int4{Int32: int32(userID), Valid: true},
+	})
+	if err != nil {
 		responses.NewResponse("Document not found or unauthorized", http.StatusNotFound).Send(ctx)
 		return
 	}
-	var documentUser dbmodels.DocumentUser
-	if err := dc.DB.Where("document_id = ? AND user_id = ?", documentID, userID).First(&documentUser).Error; err != nil {
+	// var documentUser dbmodels.DocumentUser
+	documentUser, err := dc.DB.FindDocumentUser(cxt, databases.FindDocumentUserParams{
+		DocumentID: pgtype.Int4{Int32: int32(documentID), Valid: true},
+		UserID:     pgtype.Int4{Int32: int32(userID), Valid: true},
+	})
+	if err != nil {
 		responses.NewResponse("DocumentUser association not found", http.StatusNotFound).Send(ctx)
 		return
 	}
-	if err := dc.DB.Delete(&documentUser).Error; err != nil {
+	err = dc.DB.DeleteDocumentUser(cxt, documentUser.ID)
+	if err != nil {
 		responses.NewResponse("Failed to delete document user association", http.StatusInternalServerError).Send(ctx)
 		return
 	}

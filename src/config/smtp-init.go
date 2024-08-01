@@ -15,7 +15,7 @@ type SMTP struct {
 }
 
 func InitSMTP() (*SMTP, error) {
-	portStr := "576"
+	portStr := "587"
 	smtpHost := os.Getenv("SMTP_HOST")
 	smtpUser := os.Getenv("SMTP_USER")
 	smtpPassword := os.Getenv("SMTP_PASSWORD")

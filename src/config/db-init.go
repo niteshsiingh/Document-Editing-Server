@@ -1,16 +1,17 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 
 	_ "github.com/go-sql-driver/mysql"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/niteshsiingh/doc-server/src/database/tables/databases"
 )
 
-func InitializeDatabase() (*gorm.DB, error) {
+func InitializeDatabase() (*databases.Queries, error) {
 	env := os.Getenv("ENV")
 	dbURL := os.Getenv("DB_URL")
 
@@ -26,10 +27,13 @@ func InitializeDatabase() (*gorm.DB, error) {
 		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbHost, dbPort, dbUser, dbPass, dbName)
 	}
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	ctx := context.Background()
+	conn, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		return nil, err
 	}
+	// defer conn.Close(ctx)
+	db := databases.New(conn)
 	log.Println("Database connection established")
 	return db, nil
 }

@@ -1,56 +1,84 @@
 package services
 
 import (
-	"fmt"
+	"context"
+	"encoding/json"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/jackc/pgx/v5/pgtype"
 	dbmodels "github.com/niteshsiingh/doc-server/src/database/db-models"
+	"github.com/niteshsiingh/doc-server/src/database/tables/databases"
 	"github.com/niteshsiingh/doc-server/src/entities"
 	"github.com/niteshsiingh/doc-server/src/middleware"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
-func FindUserByEmail(email string, db *gorm.DB) (dbmodels.User, error) {
-	var user dbmodels.User
-	err := db.Where("email = ?", email).First(&user).Error
+func FindUserByEmail(ctx context.Context, email string, db *databases.Queries) (databases.User, error) {
+	var user databases.User
+	emailpg := pgtype.Text{
+		String: email,
+		Valid:  true,
+	}
+	user, err := db.GetUserByEmail(ctx, emailpg)
 	if err != nil {
-		return dbmodels.User{}, err
+		return databases.User{}, err
 	}
 	return user, nil
 }
 
-func FindUserByID(id uint, db *gorm.DB) (dbmodels.User, error) {
-	var user dbmodels.User
-	err := db.Where("id = ?", id).First(&user).Error
+func FindUserByID(ctx context.Context, id uint, db *databases.Queries) (databases.User, error) {
+	var user databases.User
+	user, err := db.GetUserById(ctx, int32(id))
 	if err != nil {
-		return dbmodels.User{}, err
+		return databases.User{}, err
 	}
 	return user, nil
 }
 
-func FindUserByVerificationToken(email string, verificationToken string, db *gorm.DB) (dbmodels.User, error) {
-	var user dbmodels.User
-	err := db.Where(&dbmodels.User{VerificationToken: verificationToken, Email: email}).First(&user).Error
+func FindUserByVerificationToken(ctx context.Context, email string, verificationToken string, db *databases.Queries) (databases.User, error) {
+	var user databases.User
+	emailpg := pgtype.Text{
+		String: email,
+		Valid:  true,
+	}
+	verifypg := pgtype.Text{
+		String: verificationToken,
+		Valid:  true,
+	}
+	user, err := db.GetUserByVerificationToken(ctx, databases.GetUserByVerificationTokenParams{
+		Email:             emailpg,
+		VerificationToken: verifypg,
+	})
 	if err != nil {
-		return dbmodels.User{}, err
+		return databases.User{}, err
 	}
 	return user, nil
 }
 
-func FindUserByPasswordResetToken(email string, passwordResetToken string, db *gorm.DB) (dbmodels.User, error) {
-	var user dbmodels.User
-	err := db.Where(&dbmodels.User{PasswordResetToken: passwordResetToken, Email: email}).First(&user).Error
+func FindUserByPasswordResetToken(ctx context.Context, email string, passwordResetToken string, db *databases.Queries) (databases.User, error) {
+	var user databases.User
+	emailpg := pgtype.Text{
+		String: email,
+		Valid:  true,
+	}
+	passwordpg := pgtype.Text{
+		String: passwordResetToken,
+		Valid:  true,
+	}
+	user, err := db.GetUserByPasswordResetToken(ctx, databases.GetUserByPasswordResetTokenParams{
+		Email:              emailpg,
+		PasswordResetToken: passwordpg,
+	})
 	if err != nil {
-		return dbmodels.User{}, err
+		return databases.User{}, err
 	}
 	return user, nil
 }
 
-func (ms *MailService) CreateUser(email string, password string, db *gorm.DB) error {
+func (ms *MailService) CreateUser(ctx context.Context, email string, password string, db *databases.Queries) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -62,12 +90,16 @@ func (ms *MailService) CreateUser(email string, password string, db *gorm.DB) er
 	if err != nil {
 		return err
 	}
-	user := dbmodels.User{
-		Email:             email,
-		Password:          string(hashedPassword),
-		VerificationToken: verificationTokenString,
+	user := databases.User{
+		Email:             pgtype.Text{String: email, Valid: true},
+		Password:          pgtype.Text{String: string(hashedPassword), Valid: true},
+		VerificationToken: pgtype.Text{String: verificationTokenString, Valid: true},
 	}
-	err = db.Create(&user).Error
+	err = db.CreateUser(ctx, databases.CreateUserParams{
+		Email:             pgtype.Text{String: email, Valid: true},
+		Password:          pgtype.Text{String: string(hashedPassword), Valid: true},
+		VerificationToken: pgtype.Text{String: verificationTokenString, Valid: true},
+	})
 	if err != nil {
 		return err
 	}
@@ -78,20 +110,20 @@ func (ms *MailService) CreateUser(email string, password string, db *gorm.DB) er
 	return nil
 }
 
-func CheckPassword(user *dbmodels.User, password string, db *gorm.DB) (bool, error) {
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+func CheckPassword(user *databases.User, password string, db *databases.Queries) (bool, error) {
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password.String), []byte(password))
 	if err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func GenerateAuthResponse(user *dbmodels.User, db *gorm.DB) (entities.TokenPair, error) {
-	requestAccessTokenClaim, err := getUserClaims(*user, "ACCESS_TOKEN_EXPIRATION")
+func GenerateAuthResponse(ctx context.Context, user *databases.User, db *databases.Queries) (entities.TokenPair, error) {
+	requestAccessTokenClaim, err := getUserClaims(ctx, user, "ACCESS_TOKEN_EXPIRATION", db)
 	if err != nil {
 		return entities.TokenPair{}, err
 	}
-	requestRefreshTokenClaim, err := getUserClaims(*user, "REFRESH_TOKEN_EXPIRATION")
+	requestRefreshTokenClaim, err := getUserClaims(ctx, user, "REFRESH_TOKEN_EXPIRATION", db)
 	if err != nil {
 		return entities.TokenPair{}, err
 	}
@@ -107,17 +139,21 @@ func GenerateAuthResponse(user *dbmodels.User, db *gorm.DB) (entities.TokenPair,
 	if err != nil {
 		return entities.TokenPair{}, err
 	}
-	err = db.Where("user_id = ?", requestRefreshTokenClaim.UserID).Delete(&dbmodels.RefreshToken{}).Error
+	userID := pgtype.Int4{
+		Int32: int32(requestRefreshTokenClaim.UserID),
+		Valid: true,
+	}
+	err = db.DeleteRefreshToken(ctx, userID)
 	if err != nil {
 		return entities.TokenPair{}, err
 	}
-
-	refreshTokenDB := dbmodels.RefreshToken{
-		Token:  refreshTokenString,
-		UserID: requestRefreshTokenClaim.UserID,
-		User:   *user,
-	}
-	err = db.Create(&refreshTokenDB).Error
+	err = db.CreateRefreshToken(ctx, databases.CreateRefreshTokenParams{
+		Token: pgtype.Text{String: refreshTokenString, Valid: true},
+		UserID: pgtype.Int4{
+			Int32: int32(requestRefreshTokenClaim.UserID),
+			Valid: true,
+		},
+	})
 	if err != nil {
 		return entities.TokenPair{}, err
 	}
@@ -128,27 +164,27 @@ func GenerateAuthResponse(user *dbmodels.User, db *gorm.DB) (entities.TokenPair,
 	}, nil
 }
 
-func GetIsTokenActive(token string, db *gorm.DB) (bool, error) {
-	var refreshToken dbmodels.RefreshToken
-	err := db.Where("token = ?", token).First(&refreshToken).Error
+func GetIsTokenActive(ctx context.Context, token string, db *databases.Queries) (bool, error) {
+	_, err := db.GetRefreshToken(ctx, pgtype.Text{String: token, Valid: true})
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return false, nil
-		}
 		return false, err
 	}
 	return true, nil
 }
 
-func LogoutUser(userID uint, db *gorm.DB) error {
-	err := db.Where("user_id = ?", userID).Delete(&dbmodels.RefreshToken{}).Error
+func LogoutUser(ctx context.Context, userID uint, db *databases.Queries) error {
+	userId := pgtype.Int4{
+		Int32: int32(userID),
+		Valid: true,
+	}
+	err := db.DeleteRefreshToken(ctx, userId)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (ms *MailService) ResetPassword(user *dbmodels.User, db *gorm.DB) error {
+func (ms *MailService) ResetPassword(ctx context.Context, user *databases.User, db *databases.Queries) error {
 	refreshExpiry, err := strconv.Atoi(os.Getenv("REFRESH_VALIDITY"))
 	if err != nil {
 		return err
@@ -156,8 +192,8 @@ func (ms *MailService) ResetPassword(user *dbmodels.User, db *gorm.DB) error {
 	expiryTime := time.Duration(refreshExpiry) * time.Second
 	expirationTime := time.Now().Add(expiryTime)
 	claims := &middleware.Claims{
-		UserID:  user.ID,
-		EmailID: user.Email,
+		UserID:  uint(user.ID),
+		EmailID: user.Email.String,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},
@@ -169,8 +205,22 @@ func (ms *MailService) ResetPassword(user *dbmodels.User, db *gorm.DB) error {
 		return err
 	}
 
-	user.PasswordResetToken = tokenString
-	err = db.Save(&user).Error
+	user.PasswordResetToken = pgtype.Text{
+		String: tokenString,
+		Valid:  true,
+	}
+	err = db.EditUser(ctx, databases.EditUserParams{
+		Email:              user.Email,
+		Password:           user.Password,
+		IsVerified:         user.IsVerified,
+		VerificationToken:  user.VerificationToken,
+		PasswordResetToken: user.PasswordResetToken,
+		UserRoles:          user.UserRoles,
+		SharedDocuments:    user.SharedDocuments,
+		Documents:          user.Documents,
+		RefreshTokens:      user.RefreshTokens,
+		ID:                 user.ID,
+	})
 	if err != nil {
 		return err
 	}
@@ -183,41 +233,62 @@ func (ms *MailService) ResetPassword(user *dbmodels.User, db *gorm.DB) error {
 	return nil
 }
 
-func UpdatePassword(user dbmodels.User, password string, db *gorm.DB) error {
+func UpdatePassword(ctx context.Context, user databases.User, password string, db *databases.Queries) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	user.Password = string(hashedPassword)
-	err = db.Save(&user).Error
+	user.Password = pgtype.Text{
+		String: string(hashedPassword),
+		Valid:  true,
+	}
+	err = db.EditUser(ctx, databases.EditUserParams{
+		Email:              user.Email,
+		Password:           user.Password,
+		IsVerified:         user.IsVerified,
+		VerificationToken:  user.VerificationToken,
+		PasswordResetToken: user.PasswordResetToken,
+		UserRoles:          user.UserRoles,
+		SharedDocuments:    user.SharedDocuments,
+		Documents:          user.Documents,
+		RefreshTokens:      user.RefreshTokens,
+		ID:                 user.ID,
+	})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func UpdateIsVerified(user *dbmodels.User, isVerified bool, db *gorm.DB) error {
-	user.IsVerified = isVerified
-	err := db.Save(&user).Error
+func UpdateIsVerified(ctx context.Context, user *databases.User, isVerified bool, db *databases.Queries) error {
+	user.IsVerified = pgtype.Bool{
+		Bool:  isVerified,
+		Valid: true,
+	}
+	err := db.EditUser(ctx, databases.EditUserParams{
+		Email:              user.Email,
+		Password:           user.Password,
+		IsVerified:         user.IsVerified,
+		VerificationToken:  user.VerificationToken,
+		PasswordResetToken: user.PasswordResetToken,
+		UserRoles:          user.UserRoles,
+		SharedDocuments:    user.SharedDocuments,
+		Documents:          user.Documents,
+		RefreshTokens:      user.RefreshTokens,
+		ID:                 user.ID,
+	})
 	if err != nil {
 		return err
 	}
-	fmt.Println("user ", user)
-	var savedUser dbmodels.User
-	err = db.Where("id = ?", user.ID).First(&savedUser).Error
-	if err != nil {
-		fmt.Println("not found")
-	}
-	fmt.Println(savedUser)
 	return nil
 }
 
-func (ms *MailService) sendPasswordResetEmail(user *dbmodels.User, db *gorm.DB) error {
+func (ms *MailService) sendPasswordResetEmail(user *databases.User, db *databases.Queries) error {
 	err := ms.SendMail(MailOptions{
 		From:    os.Getenv("SMTP_USER"),
-		To:      []string{user.Email},
+		To:      []string{user.Email.String},
 		Subject: "Reset your password!",
-		Body:    os.Getenv("FRONT_END_URL") + "/user/reset-email/" + user.PasswordResetToken,
+		Body:    os.Getenv("FRONT_END_URL") + "/user/reset-email/" + user.PasswordResetToken.String,
 	})
 	if err != nil {
 		return err
@@ -225,24 +296,40 @@ func (ms *MailService) sendPasswordResetEmail(user *dbmodels.User, db *gorm.DB) 
 	return nil
 }
 
-func (ms *MailService) sendVerificationEmail(user *dbmodels.User, db *gorm.DB) error {
+func (ms *MailService) sendVerificationEmail(user *databases.User, db *databases.Queries) error {
 	err := ms.SendMail(MailOptions{
 		From:    os.Getenv("SMTP_USER"),
-		To:      []string{user.Email},
+		To:      []string{user.Email.String},
 		Subject: "Welcome to Docs!",
-		Body:    "Click the following link to verify your email: " + os.Getenv("FRONT_END_URL") + "/user/verify-email/" + user.VerificationToken,
+		Body:    "Click the following link to verify your email: " + os.Getenv("FRONT_END_URL") + "/user/verify-email/" + user.VerificationToken.String,
 	})
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 	return nil
 }
 
-func getUserClaims(user dbmodels.User, expiryPeriod string) (*middleware.Claims, error) {
+func getUserClaims(ctx context.Context, user *databases.User, expiryPeriod string, db *databases.Queries) (*middleware.Claims, error) {
 	var roles []string
-	for _, userRole := range user.UserRoles {
-		roles = append(roles, string(userRole.Role.Name))
+	var userRoles []dbmodels.UserRole
+	var userRolesMap map[int]int32
+	if len(user.UserRoles) != 0 {
+		err := json.Unmarshal(user.UserRoles, &userRolesMap)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, userRoleId := range userRolesMap {
+		role, err := db.GetUserRole(ctx, userRoleId)
+		if err != nil {
+			continue
+		}
+		userRoles = append(userRoles, dbmodels.UserRole{
+			UserID: uint(userRoleId),
+			RoleID: uint(role.ID),
+			Role:   role.Role.String,
+		})
+		roles = append(roles, role.Role.String)
 	}
 	expiryStr, err := strconv.Atoi(os.Getenv(expiryPeriod))
 	if err != nil {
@@ -252,13 +339,13 @@ func getUserClaims(user dbmodels.User, expiryPeriod string) (*middleware.Claims,
 	expirationTime := time.Now().Add(expiryTime)
 	return &middleware.Claims{
 		User: entities.JWTUser{
-			ID:        user.ID,
-			EmailID:   user.Email,
-			Documents: user.GetDocumentPermissions(),
-			Roles:     user.UserRoles,
+			ID:      uint(user.ID),
+			EmailID: user.Email.String,
+			// Documents: user.GetDocumentPermissions(),
+			Roles: userRoles,
 		},
-		UserID:  user.ID,
-		EmailID: user.Email,
+		UserID:  uint(user.ID),
+		EmailID: user.Email.String,
 		Roles:   roles,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),

@@ -1,17 +1,19 @@
 package document
 
 import (
-	"fmt"
+	"context"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/niteshsiingh/doc-server/src/database/tables/databases"
 	"github.com/niteshsiingh/doc-server/src/entities"
 	"github.com/niteshsiingh/doc-server/src/responses"
 	"github.com/niteshsiingh/doc-server/src/services"
-	"gorm.io/datatypes"
 )
 
 func (dc *DocumentController) UpdateDocument(ctx *gin.Context) {
+	cxt := context.Background()
 	documentIDstr := ctx.Param("document_id")
 	documentID, err := strconv.ParseUint(documentIDstr, 10, 64)
 	if err != nil {
@@ -21,21 +23,23 @@ func (dc *DocumentController) UpdateDocument(ctx *gin.Context) {
 	var updateDocumentRequest entities.UpdateDocumentRequest
 	err = ctx.ShouldBindJSON(&updateDocumentRequest)
 	if err != nil {
-		fmt.Println(err)
 		responses.NewResponse("Invalid json request", 400).Send(ctx)
 		return
 	}
-	document, err := services.FindDocumentByID(uint(documentID), uint(updateDocumentRequest.UserID), dc.DB)
+	document, err := services.FindDocumentByID(cxt, uint(documentID), uint(updateDocumentRequest.UserID), dc.DB)
 	if err != nil {
 		responses.NewResponse("Document not found", 404).Send(ctx)
 		return
 	}
-	document.Title = updateDocumentRequest.Title
-
-	document.Content = datatypes.JSON(updateDocumentRequest.Content)
-	document.IsPublic = updateDocumentRequest.IsPublic
-
-	err = dc.DB.Save(&document).Error
+	document.Title = pgtype.Text{String: updateDocumentRequest.Title, Valid: true}
+	document.IsPublic = pgtype.Bool{Bool: updateDocumentRequest.IsPublic, Valid: true}
+	err = dc.DB.EditDocument(cxt, databases.EditDocumentParams{
+		Title:    document.Title,
+		UserID:   document.UserID,
+		IsPublic: document.IsPublic,
+		Body:     document.Body,
+		ID:       document.ID,
+	})
 	if err != nil {
 		responses.NewResponse("Failed to update document", 500).Send(ctx)
 		return

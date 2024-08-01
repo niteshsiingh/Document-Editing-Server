@@ -1,22 +1,23 @@
 package user
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/niteshsiingh/doc-server/src/database/tables/databases"
 	"github.com/niteshsiingh/doc-server/src/entities"
 	"github.com/niteshsiingh/doc-server/src/middleware"
 	"github.com/niteshsiingh/doc-server/src/responses"
 	"github.com/niteshsiingh/doc-server/src/services"
-	"gorm.io/gorm"
 )
 
 type UserController struct {
-	DB *gorm.DB
+	DB *databases.Queries
 	MS *services.MailService
 }
 
-func NewUserController(db *gorm.DB) *UserController {
+func NewUserController(db *databases.Queries) *UserController {
 	ms, err := services.NewMailService()
 	if err != nil {
 		return nil
@@ -29,6 +30,7 @@ func NewUserController(db *gorm.DB) *UserController {
 }
 
 func (uc *UserController) CreateUser(ctx *gin.Context) {
+	cxt := context.Background()
 	var createUserRequest entities.CreateUserRequest
 
 	err := ctx.ShouldBindJSON(&createUserRequest)
@@ -36,7 +38,7 @@ func (uc *UserController) CreateUser(ctx *gin.Context) {
 		responses.NewResponse("Invalid request", 400).Send(ctx)
 		return
 	}
-	err = uc.MS.CreateUser(createUserRequest.Email, createUserRequest.Password, uc.DB)
+	err = uc.MS.CreateUser(cxt, createUserRequest.Email, createUserRequest.Password, uc.DB)
 	if err != nil {
 		responses.NewResponse("Internal server error", 500).Send(ctx)
 		return
@@ -45,22 +47,23 @@ func (uc *UserController) CreateUser(ctx *gin.Context) {
 }
 
 func (uc *UserController) VerifyEmail(ctx *gin.Context) {
+	cxt := context.Background()
 	verificationToken := ctx.Param("token")
 	email, err := middleware.GetAuth().ParseVerification(verificationToken)
 	if err != nil {
 		responses.NewResponse("Invalid token", 403).Send(ctx)
 		return
 	}
-	user, err := services.FindUserByVerificationToken(email, verificationToken, uc.DB)
+	user, err := services.FindUserByVerificationToken(cxt, email, verificationToken, uc.DB)
 	if err != nil {
 		responses.NewResponse("Internal server error", 500).Send(ctx)
 		return
 	}
-	if user.IsVerified {
+	if user.IsVerified.Bool {
 		responses.NewResponse("Invalid Request", 400).Send(ctx)
 		return
 	}
-	err = services.UpdateIsVerified(&user, true, uc.DB)
+	err = services.UpdateIsVerified(cxt, &user, true, uc.DB)
 	if err != nil {
 		responses.NewResponse("Internal server error", 500).Send(ctx)
 		return
@@ -69,13 +72,14 @@ func (uc *UserController) VerifyEmail(ctx *gin.Context) {
 }
 
 func (uc *UserController) GetUserByID(ctx *gin.Context) {
+	cxt := context.Background()
 	userIDStr := ctx.Param("id")
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
 		responses.NewResponse("Internal server error", 500).Send(ctx)
 		return
 	}
-	user, err := services.FindUserByID(uint(userID), uc.DB)
+	user, err := services.FindUserByID(cxt, uint(userID), uc.DB)
 	if err != nil {
 		responses.NewResponse("Invalid Request", 400).Send(ctx)
 	}

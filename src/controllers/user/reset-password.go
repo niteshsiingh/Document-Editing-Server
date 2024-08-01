@@ -1,6 +1,8 @@
 package user
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 	"github.com/niteshsiingh/doc-server/src/entities"
 	"github.com/niteshsiingh/doc-server/src/middleware"
@@ -9,21 +11,23 @@ import (
 )
 
 func (uc *UserController) ResetPassword(ctx *gin.Context) {
+	cxt := context.Background()
 	var resetPassword entities.ResetPasswordRequest
 	err := ctx.ShouldBindJSON(&resetPassword)
 	if err != nil {
 		responses.NewResponse("Internal server error", 500).Send(ctx)
 		return
 	}
-	user, err := services.FindUserByEmail(resetPassword.Email, uc.DB)
+	user, err := services.FindUserByEmail(cxt, resetPassword.Email, uc.DB)
 	if err != nil {
 		responses.NewResponse("Invalid Request", 400).Send(ctx)
 	}
-	uc.MS.ResetPassword(&user, uc.DB)
+	uc.MS.ResetPassword(cxt, &user, uc.DB)
 	responses.NewResponse(user, 200).Send(ctx)
 }
 
 func (uc *UserController) ConfirmResetPassword(ctx *gin.Context) {
+	cxt := context.Background()
 	var confirmResetPassword entities.ConfirmResetPasswordRequest
 	passwordResetToken := ctx.Param("token")
 	err := ctx.ShouldBindJSON(&confirmResetPassword)
@@ -36,12 +40,12 @@ func (uc *UserController) ConfirmResetPassword(ctx *gin.Context) {
 		responses.NewResponse("Invalid token", 403).Send(ctx)
 		return
 	}
-	user, err := services.FindUserByPasswordResetToken(email, passwordResetToken, uc.DB)
+	user, err := services.FindUserByPasswordResetToken(cxt, email, passwordResetToken, uc.DB)
 	if err != nil {
 		responses.NewResponse("Internal server error", 500).Send(ctx)
 		return
 	}
-	err = services.UpdatePassword(user, confirmResetPassword.Password, uc.DB)
+	err = services.UpdatePassword(cxt, user, confirmResetPassword.Password, uc.DB)
 	if err != nil {
 		responses.NewResponse("Internal server error", 500).Send(ctx)
 		return
