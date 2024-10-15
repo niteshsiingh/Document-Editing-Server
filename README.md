@@ -25,7 +25,7 @@
 
 1. **Clone the repository**:
     ```sh
-    git clone https://github.com/niteshsiingh/doc-server.git
+    git clone https://github.com/niteshsiingh/Document-Editing-Server.git
     cd doc-server
     ```
 
