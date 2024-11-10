@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -40,6 +41,7 @@ func (uc *UserController) CreateUser(ctx *gin.Context) {
 	}
 	err = uc.MS.CreateUser(cxt, createUserRequest.Email, createUserRequest.Password, uc.DB)
 	if err != nil {
+		fmt.Println(err)
 		responses.NewResponse("Internal server error", 500).Send(ctx)
 		return
 	}

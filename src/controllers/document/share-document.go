@@ -2,6 +2,7 @@ package document
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -84,6 +85,7 @@ func (dc *DocumentController) ShareDocument(ctx *gin.Context) {
 		Admin:      pgtype.Bool{Bool: true, Valid: true},
 	})
 	if err != nil {
+		fmt.Println(err)
 		responses.NewResponse("Failed to share document", 500).Send(ctx)
 		return
 	}
@@ -93,12 +95,13 @@ func (dc *DocumentController) ShareDocument(ctx *gin.Context) {
 		return
 	}
 	mail := services.MailOptions{
-		From:    "8826ns@gmail.com",
+		From:    os.Getenv("BREVO_SENDER_EMAIL"),
 		To:      []string{sharedUser.Email.String},
 		Subject: user.Email.String + " shared a document with you!",
 		Body:    "Click the following link to view and edit the document: " + os.Getenv("FRONT_END_URL") + "/document/" + strconv.Itoa(int(documentID)),
 	}
 	if err := dc.MS.SendMail(mail); err != nil {
+		fmt.Println(err, 2)
 		responses.NewResponse("Failed to send email", 500).Send(ctx)
 		return
 	}

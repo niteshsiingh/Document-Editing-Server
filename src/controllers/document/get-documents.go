@@ -2,6 +2,7 @@ package document
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -80,6 +81,7 @@ func (dc *DocumentController) GetDocumentIdentifiers(ctx *gin.Context) {
 		responses.NewResponse("Invalid document ID", 400).Send(ctx)
 		return
 	}
+
 	document, err := services.FindIdentifiersWithDocID(cxt, uint(documentID), dc.DB)
 	if err != nil {
 		responses.NewResponse("Document not found", 404).Send(ctx)
@@ -113,8 +115,12 @@ func (dc *DocumentController) GetAllDocuments(ctx *gin.Context) {
 	var documents []databases.Document
 	documents, err = dc.DB.GetAllDocuments(cxt, pgtype.Int4{Int32: int32(userID), Valid: true})
 	if err != nil {
+		fmt.Println(err)
 		responses.NewResponse("Failed to get documents", 500).Send(ctx)
 		return
+	}
+	for _, document := range documents {
+		fmt.Println(document)
 	}
 	responses.NewResponse(documents, 200).Send(ctx)
 }
