@@ -19,17 +19,16 @@ import (
 	"github.com/googollee/go-socket.io/engineio/transport/polling"
 	"github.com/googollee/go-socket.io/engineio/transport/websocket"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/joho/godotenv"
 	"github.com/niteshsiingh/doc-server/src/config"
 	"github.com/niteshsiingh/doc-server/src/database/tables/databases"
 	"github.com/niteshsiingh/doc-server/src/middleware"
 )
 
 func main() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Fatalf("Error loading .env file: %s", err)
-	}
+	// err := godotenv.Load(".env")
+	// if err != nil {
+	// 	log.Fatalf("Error loading .env file: %s", err)
+	// }
 	db, err := config.InitializeDatabase()
 	if err != nil {
 		log.Fatal(err)
