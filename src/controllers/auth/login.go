@@ -54,6 +54,7 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 
 	validPassword, err := services.CheckPassword(&user, loginData.Password, ac.DB)
 	if err != nil {
+		fmt.Println(err)
 		responses.NewResponse("Internal server error", http.StatusInternalServerError).Send(ctx)
 		return
 	}

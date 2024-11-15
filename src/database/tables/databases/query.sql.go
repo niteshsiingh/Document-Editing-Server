@@ -12,9 +12,15 @@ import (
 )
 
 const createDocument = `-- name: CreateDocument :one
-INSERT INTO documents (title, user_id, is_public, body)
-VALUES ($1, $2, $3, $4)
-RETURNING id
+WITH new_document AS (
+    INSERT INTO documents (title, user_id, is_public, body)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id
+)
+INSERT INTO document_users (user_id, document_id, version, read, write, download, share, admin)
+SELECT $2, id, 1, true, true, true, true, true
+FROM new_document
+RETURNING document_id
 `
 
 type CreateDocumentParams struct {
@@ -24,16 +30,18 @@ type CreateDocumentParams struct {
 	Body     []byte
 }
 
-func (q *Queries) CreateDocument(ctx context.Context, arg CreateDocumentParams) (int32, error) {
+// Insert into documents and return the new document id
+// Use the returned document id to insert into document_users
+func (q *Queries) CreateDocument(ctx context.Context, arg CreateDocumentParams) (pgtype.Int4, error) {
 	row := q.db.QueryRow(ctx, createDocument,
 		arg.Title,
 		arg.UserID,
 		arg.IsPublic,
 		arg.Body,
 	)
-	var id int32
-	err := row.Scan(&id)
-	return id, err
+	var document_id pgtype.Int4
+	err := row.Scan(&document_id)
+	return document_id, err
 }
 
 const createDocumentUser = `-- name: CreateDocumentUser :exec
@@ -491,7 +499,11 @@ func (q *Queries) FindDocumentUser(ctx context.Context, arg FindDocumentUserPara
 
 const getAllDocuments = `-- name: GetAllDocuments :many
 SELECT id, created_at, updated_at, deleted_at, title, user_id, is_public, body FROM documents
-WHERE user_id = $1 OR is_public = true
+WHERE id IN (
+    SELECT document_id
+    FROM document_users as du
+    WHERE du.user_id = $1
+) OR is_public = true
 ORDER BY updated_at DESC
 `
 
@@ -557,8 +569,17 @@ func (q *Queries) GetAllIdentifiers(ctx context.Context, docID pgtype.Int4) ([]I
 }
 
 const getDocumentById = `-- name: GetDocumentById :one
-SELECT id, created_at, updated_at, deleted_at, title, user_id, is_public, body FROM documents
-WHERE id = $1 AND (is_public = true OR user_id = $2)
+SELECT id, created_at, updated_at, deleted_at, title, user_id, is_public, body 
+FROM documents d
+WHERE d.id = $1 
+  AND (d.is_public = true 
+       OR EXISTS (
+           SELECT 1 
+           FROM document_users du 
+           WHERE du.document_id = d.id 
+             AND du.user_id = $2
+       )
+      )
 LIMIT 1
 `
 

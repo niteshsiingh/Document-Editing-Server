@@ -49,6 +49,6 @@ func (dc *DocumentController) CreateDocument(ctx *gin.Context) {
 	type res struct {
 		ID int32 `json:"id"`
 	}
-	respon := res{ID: newDocID}
+	respon := res{ID: newDocID.Int32}
 	responses.NewResponse(respon, 200).Send(ctx)
 }

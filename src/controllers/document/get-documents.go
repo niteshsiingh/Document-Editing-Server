@@ -54,6 +54,7 @@ func (dc *DocumentController) GetOneDocument(ctx *gin.Context) {
 	}
 	document, err := services.FindDocumentByID(cxt, uint(documentID), uint(userID), dc.DB)
 	if err != nil {
+		fmt.Println(err)
 		responses.NewResponse("Document not found", 404).Send(ctx)
 		return
 	}

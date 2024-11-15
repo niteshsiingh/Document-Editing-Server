@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 
@@ -12,20 +13,22 @@ import (
 
 func InitializeDatabase() (*databases.Queries, error) {
 	env := os.Getenv("ENV")
-	dbURL := os.Getenv("DB_URL")
-
+	dbURL := os.Getenv("DATABASE_URL")
+	// env = "prod"
+	fmt.Println(env)
+	fmt.Println(dbURL)
 	var dsn string
 	if env == "prod" {
 		// dsn = fmt.Sprintf("%s?sslmode=require&sslrootcert=/path/to/ca.crt", dbURL)
 		dsn = dbURL
+		// dsn = dbURL
 	} else {
-		// dbUser := os.Getenv("DB_USER")
-		// dbPass := os.Getenv("DB_PASSWORD")
-		// dbHost := os.Getenv("DB_HOST")
-		// dbPort := os.Getenv("DB_PORT")
-		// dbName := os.Getenv("DB_NAME")
-		dsn = dbURL
-		// dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbHost, dbPort, dbUser, dbPass, dbName)
+		dbUser := os.Getenv("USER")
+		dbPass := os.Getenv("PASSWORD")
+		dbHost := os.Getenv("DB_HOST")
+		dbPort := os.Getenv("DB_PORT")
+		dbName := os.Getenv("DATABASE")
+		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbHost, dbPort, dbUser, dbPass, dbName)
 	}
 
 	ctx := context.Background()

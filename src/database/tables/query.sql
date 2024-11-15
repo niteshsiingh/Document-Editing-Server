@@ -22,9 +22,17 @@ SET email = $1,
 WHERE id = $10;
 
 -- name: CreateDocument :one
-INSERT INTO documents (title, user_id, is_public, body)
-VALUES ($1, $2, $3, $4)
-RETURNING id;
+-- Insert into documents and return the new document id
+WITH new_document AS (
+    INSERT INTO documents (title, user_id, is_public, body)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id
+)
+-- Use the returned document id to insert into document_users
+INSERT INTO document_users (user_id, document_id, version, read, write, download, share, admin)
+SELECT $2, id, 1, true, true, true, true, true
+FROM new_document
+RETURNING document_id;
 
 -- name: DeleteDocument :exec
 UPDATE documents
@@ -155,12 +163,25 @@ VALUES ($1, $2);
 
 -- name: GetAllDocuments :many
 SELECT * FROM documents
-WHERE user_id = $1 OR is_public = true
+WHERE id IN (
+    SELECT document_id
+    FROM document_users as du
+    WHERE du.user_id = $1
+) OR is_public = true
 ORDER BY updated_at DESC;
 
 -- name: GetDocumentById :one
-SELECT * FROM documents
-WHERE id = $1 AND (is_public = true OR user_id = $2)
+SELECT * 
+FROM documents d
+WHERE d.id = $1 
+  AND (d.is_public = true 
+       OR EXISTS (
+           SELECT 1 
+           FROM document_users du 
+           WHERE du.document_id = d.id 
+             AND du.user_id = $2
+       )
+      )
 LIMIT 1;
 
 -- name: FindDocument :one
